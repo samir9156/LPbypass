@@ -1,18 +1,7 @@
 {
-  "used_ips": [
-    "152.55.176.23"
-  ],
-  "used_user_agents": [
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-  ],
-  "completed_tasks": [
-    "https://linkpays.in/vVVSq",
-    "https://t.me/SenpaiAnimess"
-  ],
-  "current_region": "us-west4",
-  "code:vVVSq": {
-    "chainStartedAt": 1794302239967,
+  "code:62Uv": {
+    "chainStartedAt": 1794302607973,
     "lastHost": "linkpays.in",
-    "lastUrl": "https://linkpays.in/vVVSq"
+    "lastUrl": "https://linkpays.in/62Uv"
   }
 }
