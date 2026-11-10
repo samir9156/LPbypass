@@ -3,14 +3,7 @@ from datetime import datetime
 from urllib.parse import urlparse, urljoin
 from pyvirtualdisplay import Display
 from playwright.async_api import async_playwright
-
-# Naya Import Fingerprint Spoofing ke liye
-try:
-    from browser_stealth import Stealth
-except ImportError:
-    print("⚠️ browser-stealth not installed. Installing...")
-    os.system("pip install browser-stealth[playwright]")
-    from browser_stealth import Stealth
+from playwright_stealth import stealth_async
 
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
 GITHUB_REPO = os.environ.get("GITHUB_REPO", "")
@@ -98,7 +91,7 @@ def get_next_url():
     if not available: return None
     return random.choice(available)
 
-# ==================== RAILWAY API (FIXED) ====================
+# ==================== RAILWAY API ====================
 def trigger_railway_redeploy():
     if not RAILWAY_TOKEN or not RAILWAY_SERVICE_ID or not RAILWAY_ENVIRONMENT_ID:
         log("⚠️ Railway API keys missing.")
@@ -112,7 +105,6 @@ def trigger_railway_redeploy():
 
     log(f"🚀 Triggering Railway redeploy to region: {next_region}")
     
-    # Endpoint .com me change kiya
     url = "https://backboard.railway.com/graphql/v2"
     query = """
     mutation serviceInstanceUpdate($environmentId: String!, $serviceId: String!, $input: ServiceInstanceUpdateInput!) {
@@ -511,22 +503,19 @@ async def run():
         browser = await p.chromium.launch(**launch_opts)
         ctx = await browser.new_context(user_agent=ua, viewport={"width": 1920, "height": 1080}, locale="en-IN")
         
-        # Fingerprint Spoofing Apply
-        stealth = Stealth()
-        await stealth.apply_stealth_async(ctx)
-        
         async def block_route(route):
             if TRACK_RE.search(route.request.url) or BANDWIDTH_SAVE_RE.search(route.request.url): await route.abort()
             else: await route.continue_()
         await ctx.route("**/*", block_route)
         
-        # Random Cookies Generate
         random_cookies = [{"name": f"cookie_{random.randint(1,1000)}", "value": f"val_{random.randint(1000,9999)}", "domain": ".linkpays.in", "path": "/"}]
         await ctx.add_cookies(random_cookies)
         
         page = await ctx.new_page()
         
-        # Native Stealth JS (Basic fallback)
+        # Apply Playwright Stealth
+        await stealth_async(page)
+        
         await page.add_init_script("""
             Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
             window.chrome = window.chrome || { runtime: {}, loadTimes: function(){}, csi: function(){} };
