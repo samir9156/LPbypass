@@ -1,4 +1,15 @@
 {
+  "used_ips": [
+    "152.55.177.122"
+  ],
+  "used_user_agents": [
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+  ],
+  "completed_tasks": [
+    "https://linkpays.in/62Uv",
+    "https://movies4u.toys/daredevil-born-again-2025-season-1-multi-audio-web-series-web-dl/"
+  ],
+  "current_region": "us-east4-eqdc4a",
   "code:62Uv": {
     "chainStartedAt": 1794305530548,
     "lastHost": "linkpays.in",
