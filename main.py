@@ -1,4 +1,4 @@
-import os, re, json, time, asyncio, random, urllib.parse, urllib.request, base64
+import os, re, json, time, asyncio, random, urllib.parse, urllib.request, base64, socket
 from datetime import datetime
 from urllib.parse import urlparse, urljoin
 from pyvirtualdisplay import Display
@@ -9,6 +9,7 @@ GITHUB_REPO = os.environ.get("GITHUB_REPO", "")
 RAILWAY_TOKEN = os.environ.get("RAILWAY_TOKEN", "")
 RAILWAY_SERVICE_ID = os.environ.get("RAILWAY_SERVICE_ID", "")
 RAILWAY_ENVIRONMENT_ID = os.environ.get("RAILWAY_ENVIRONMENT_ID", "")
+LINKPAYS_API_KEY = os.environ.get("LINKPAYS_API_KEY", "") # Naya variable API ke liye
 
 DB_FILE = "db.json"
 URLS_FILE = "urls.txt"
@@ -25,6 +26,16 @@ def get_host(u):
     try: return urlparse(u).hostname.replace("www.", "") if urlparse(u).hostname else ""
     except: return ""
 def base_url(u): return u.split("#")[0]
+
+# ==================== IP & GEO INFO ====================
+def get_ip_info():
+    try:
+        req = urllib.request.Request("http://ip-api.com/json", headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read().decode())
+            return data.get("query", "Unknown"), data.get("regionName", "Unknown"), data.get("country", "Unknown"), data.get("city", "Unknown")
+    except:
+        return "Unknown", "Unknown", "Unknown", "Unknown"
 
 # ==================== GITHUB DB ====================
 def gh_api(method, path, data=None):
@@ -352,6 +363,10 @@ def is_valid_dest(u, current_url=None):
     return True
 
 async def is_real_destination(page):
+    # Custom check for movies4u.toys
+    if "movies4u" in page.url.lower():
+        return True
+
     if await find_generic(page): return False
     if await find_not_robot(page): return False
     loc, _ = await find_continue_nn(page)
@@ -496,6 +511,10 @@ async def run():
     if not target_url: log("🎉 All URLs completed. Exiting."); return
     log(f"🎯 Selected Random Target: {target_url}")
     
+    # IP and Geo info
+    ip, region, state, country = get_ip_info()
+    log(f"🌐 IP: {ip} | Region: {region} | State: {state} | Country: {country}")
+
     ua = random.choice(["Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36", "Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36"])
     
     display = Display(visible=0, size=(1920, 1080)); display.start()
@@ -585,9 +604,10 @@ async def run():
             if target_url not in db["completed_tasks"]: db["completed_tasks"].append(target_url)
             if dest_url not in db["completed_tasks"]: db["completed_tasks"].append(dest_url)
             db["used_user_agents"].append(ua)
-            db["used_ips"].append("railway_ip")
+            db["used_ips"].append(ip)
             save_db(db)
             log(f"✅ Task completed and saved to DB: {dest_url}")
+            log(f"🌐 IP: {ip} | Region: {region} | State: {state} | Country: {country}")
         await browser.close()
     
     display.stop()
