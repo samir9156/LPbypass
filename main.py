@@ -1,4 +1,4 @@
-import os, re, json, time, asyncio, random, urllib.parse, urllib.request
+import os, re, json, time, asyncio, random, urllib.parse, urllib.request, base64
 from datetime import datetime
 from urllib.parse import urlparse, urljoin
 from pyvirtualdisplay import Display
@@ -43,7 +43,8 @@ def gh_api(method, path, data=None):
 
 def load_gh_file(path):
     res = gh_api("GET", path)
-    if res and "content" in res: return base64.b64decode(res["content"]).decode("utf-8")
+    if res and "content" in res: 
+        return base64.b64decode(res["content"]).decode("utf-8")
     return ""
 
 def save_gh_file(path, content):
@@ -266,7 +267,7 @@ async def find_not_robot(page):
                     for (let i = 0; i < 8 && n && n !== document.body; i++) {
                         if (n.tagName === 'IFRAME') return 'iframe';
                         const cls = ((n.className || '') + ' ' + (n.id || '')).toLowerCase();
-                        if (/(ad|ads|advert|sponsor|promo|banner|interstitial|popup|overlay)/.test(cls)) return 'ad-class';
+                        if (/\b(ad|ads|advert|sponsor|promo|banner|interstitial|popup|overlay)\b/.test(cls)) return 'ad-class';
                         const s = getComputedStyle(n); const r = n.getBoundingClientRect();
                         if ((s.position === 'fixed' || s.position === 'absolute') && r.width > 100 && r.width < 800 && r.height > 80 && r.height < 800 && (s.boxShadow !== 'none' || parseFloat(s.borderRadius) > 0)) return 'fixed-popup';
                         n = n.parentElement;
@@ -499,7 +500,6 @@ async def run():
     
     display = Display(visible=0, size=(1920, 1080)); display.start()
     
-    # SIRF RAILWAY IP KE LIYE LAUNCH OPTS (NO PROXY)
     launch_opts = {
         "headless": False, 
         "args": ["--no-sandbox", "--disable-dev-shm-usage", "--disable-blink-features=AutomationControlled"]
@@ -585,7 +585,7 @@ async def run():
             if target_url not in db["completed_tasks"]: db["completed_tasks"].append(target_url)
             if dest_url not in db["completed_tasks"]: db["completed_tasks"].append(dest_url)
             db["used_user_agents"].append(ua)
-            db["used_ips"].append("railway_ip") # Placeholder for tracking
+            db["used_ips"].append("railway_ip")
             save_db(db)
             log(f"✅ Task completed and saved to DB: {dest_url}")
         await browser.close()
