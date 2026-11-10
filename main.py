@@ -58,10 +58,15 @@ def save_gh_file(path, content):
 
 def load_db():
     content = load_gh_file("db.json")
+    default_db = {"used_ips": [], "used_user_agents": [], "completed_tasks": [], "current_region": REGIONS[0]}
     if content:
-        try: return json.loads(content)
+        try:
+            parsed = json.loads(content)
+            if isinstance(parsed, dict):
+                default_db.update(parsed)
+                return default_db
         except: pass
-    return {"used_ips": [], "used_user_agents": [], "completed_tasks": [], "current_region": REGIONS[0]}
+    return default_db
 
 def save_db(db): save_gh_file("db.json", json.dumps(db, indent=2))
 
@@ -372,10 +377,7 @@ async def fast_forward_meta(page):
         }""")
     except: content = None
     if not content: return False
-    
-    # REGEX FIXED HERE (Used triple quotes to avoid quote conflict)
     m = re.match(r"""^\s*(\d+)\s*;\s*url\s*=\s*['"]?([^'"]+)""", content, re.I)
-    
     if not m or int(m.group(1)) < 2: return False
     try: target = urljoin(page.url, m.group(2))
     except: return False
@@ -392,6 +394,29 @@ def is_valid_dest(u, current_url=None):
     if h in CHAIN_HOSTS or h.endswith(".linkpays.in") or h == "linkpays.in": return False
     if TRACK_RE.search(u): return False
     if current_url and base_url(u) == base_url(current_url): return False
+    return True
+
+# ==================== NEW: CONTENT CHECK ====================
+async def is_real_destination(page):
+    # Check buttons
+    if await find_generic(page): return False
+    if await find_not_robot(page): return False
+    loc, _ = await find_continue_nn(page)
+    if loc: return False
+    
+    # Check page text
+    try:
+        text = await page.evaluate("() => (document.body?.innerText || '').toLowerCase()")
+        if not text or len(text) < 50: return False
+        if re.search(r'wait\s*\d+|continue|click\s*(any|on|below|here)|verify|generat|seconds|timer', text):
+            return False
+    except: return False
+    
+    # Check meta refresh
+    try:
+        if await page.evaluate("() => !!document.querySelector('meta[http-equiv=\"refresh\" i]')"): return False
+    except: pass
+
     return True
 
 async def find_dest(page, cur_host):
@@ -535,8 +560,15 @@ async def run():
         state = {}; dest_url = None; gateway_visits = {}; bounce_count = 0; last_base = ""; stuck = 0; t0 = time.time()
         while time.time() - t0 < 900:
             cur_u = page.url; cur_b = base_url(cur_u); cur_h = get_host(cur_u)
+            
+            # Check if it's potentially a destination
             if cur_h and cur_h not in GATEWAY_HOSTS and cur_h not in CHAIN_HOSTS and not re.search(r'[?&](verify|link|code|goto|go|r|ref)=', cur_u, re.I) and not TRACK_RE.search(cur_u):
-                dest_url = cur_u; log(f"✅ DESTINATION: {cur_u}"); break
+                await asyncio.sleep(1.5) # Wait for page content to load
+                if await is_real_destination(page):
+                    dest_url = cur_u; log(f"✅ DESTINATION: {cur_u}"); break
+                else:
+                    log(f"  🔗 Disguised chain page detected at {cur_h}")
+
             if cur_b == last_base: stuck += 1
             else: stuck = 0; last_base = cur_b
             if stuck > 180: log("STUCK"); break
@@ -572,17 +604,22 @@ async def run():
             if base_url(page.url) != base_url(cur_u):
                 nh = get_host(page.url)
                 if nh and nh not in GATEWAY_HOSTS and nh not in CHAIN_HOSTS and not re.search(r'[?&](verify|link|code|goto|go|r|ref)=', page.url, re.I) and not TRACK_RE.search(page.url):
-                    dest_url = page.url; log(f"✅ DESTINATION: {page.url}"); break
+                    # Will be checked on next loop iteration
+                    pass
             await asyncio.sleep(0.8)
 
         if dest_url:
             db = load_db()
+            if "completed_tasks" not in db: db["completed_tasks"] = []
+            if "used_user_agents" not in db: db["used_user_agents"] = []
+            if "used_ips" not in db: db["used_ips"] = []
+            
             if target_url not in db["completed_tasks"]: db["completed_tasks"].append(target_url)
             if dest_url not in db["completed_tasks"]: db["completed_tasks"].append(dest_url)
             db["used_user_agents"].append(ua)
             if proxy_url: db["used_ips"].append(proxy_url)
             save_db(db)
-            log(f"✅ Task completed: {dest_url}")
+            log(f"✅ Task completed and saved to DB: {dest_url}")
         await browser.close()
     
     if local_proxy: local_proxy.stop()
