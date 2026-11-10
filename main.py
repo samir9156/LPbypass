@@ -4,12 +4,20 @@ from urllib.parse import urlparse, urljoin
 from pyvirtualdisplay import Display
 from playwright.async_api import async_playwright
 
+# Naya Import Fingerprint Spoofing ke liye
+try:
+    from browser_stealth import Stealth
+except ImportError:
+    print("⚠️ browser-stealth not installed. Installing...")
+    os.system("pip install browser-stealth[playwright]")
+    from browser_stealth import Stealth
+
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
 GITHUB_REPO = os.environ.get("GITHUB_REPO", "")
 RAILWAY_TOKEN = os.environ.get("RAILWAY_TOKEN", "")
 RAILWAY_SERVICE_ID = os.environ.get("RAILWAY_SERVICE_ID", "")
 RAILWAY_ENVIRONMENT_ID = os.environ.get("RAILWAY_ENVIRONMENT_ID", "")
-LINKPAYS_API_KEY = os.environ.get("LINKPAYS_API_KEY", "") # Naya variable API ke liye
+LINKPAYS_API_KEY = os.environ.get("LINKPAYS_API_KEY", "")
 
 DB_FILE = "db.json"
 URLS_FILE = "urls.txt"
@@ -90,7 +98,7 @@ def get_next_url():
     if not available: return None
     return random.choice(available)
 
-# ==================== RAILWAY API ====================
+# ==================== RAILWAY API (FIXED) ====================
 def trigger_railway_redeploy():
     if not RAILWAY_TOKEN or not RAILWAY_SERVICE_ID or not RAILWAY_ENVIRONMENT_ID:
         log("⚠️ Railway API keys missing.")
@@ -104,7 +112,8 @@ def trigger_railway_redeploy():
 
     log(f"🚀 Triggering Railway redeploy to region: {next_region}")
     
-    url = "https://backboard.railway.app/graphql/v2"
+    # Endpoint .com me change kiya
+    url = "https://backboard.railway.com/graphql/v2"
     query = """
     mutation serviceInstanceUpdate($environmentId: String!, $serviceId: String!, $input: ServiceInstanceUpdateInput!) {
       serviceInstanceUpdate(environmentId: $environmentId, serviceId: $serviceId, input: $input)
@@ -130,34 +139,6 @@ def trigger_railway_redeploy():
         log(f"❌ Failed to trigger Railway API: {e.code} Forbidden (Check token!)")
     except Exception as e:
         log(f"❌ Failed to trigger Railway API: {e}")
-
-# ==================== STEALTH JS ====================
-STEALTH_JS = """
-    Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
-    window.chrome = window.chrome || { runtime: {}, loadTimes: function(){}, csi: function(){} };
-    Object.defineProperty(navigator, 'languages', {get: () => ['en-IN','en']});
-    Object.defineProperty(navigator, 'plugins', {get: () => [1,2,3,4,5]});
-    Object.defineProperty(navigator, 'deviceMemory', {get: () => 8});
-    const getParameter = WebGLRenderingContext.prototype.getParameter;
-    WebGLRenderingContext.prototype.getParameter = function(parameter) {
-        if (parameter === 37445) return 'Intel Inc.';
-        if (parameter === 37446) return 'Intel Iris OpenGL Engine';
-        return getParameter.apply(this, [parameter]);
-    };
-    const stripDbg = c => typeof c === 'string' ? c.replace(/\\bdebugger\\b/g, '') : c;
-    const origEval = window.eval;
-    window.eval = function(c) {
-        if (typeof c === 'string' && /chp_?ad|chp_ads_block|chp_branding/i.test(c)) return undefined;
-        return origEval.call(this, stripDbg(c));
-    };
-    const origFn = window.Function;
-    window.Function = function(...a) { return origFn.apply(this, a.map(x => stripDbg(x))); };
-    const SPEEDUP = 20;
-    const _st = window.setTimeout;
-    window.setTimeout = function(fn, d, ...a) { return _st.call(this, fn, d > 500 ? Math.max(50, d / SPEEDUP) : d, ...a); };
-    const _si = window.setInterval;
-    window.setInterval = function(fn, d, ...a) { return _si.call(this, fn, d > 500 ? Math.max(50, d / SPEEDUP) : d, ...a); };
-"""
 
 # ==================== HELPERS ====================
 async def is_vis(loc):
@@ -363,7 +344,6 @@ def is_valid_dest(u, current_url=None):
     return True
 
 async def is_real_destination(page):
-    # Custom check for movies4u.toys
     if "movies4u" in page.url.lower():
         return True
 
@@ -511,11 +491,14 @@ async def run():
     if not target_url: log("🎉 All URLs completed. Exiting."); return
     log(f"🎯 Selected Random Target: {target_url}")
     
-    # IP and Geo info
     ip, region, state, country = get_ip_info()
     log(f"🌐 IP: {ip} | Region: {region} | State: {state} | Country: {country}")
 
-    ua = random.choice(["Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36", "Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36"])
+    ua = random.choice([
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36"
+    ])
     
     display = Display(visible=0, size=(1920, 1080)); display.start()
     
@@ -527,11 +510,44 @@ async def run():
     async with async_playwright() as p:
         browser = await p.chromium.launch(**launch_opts)
         ctx = await browser.new_context(user_agent=ua, viewport={"width": 1920, "height": 1080}, locale="en-IN")
+        
+        # Fingerprint Spoofing Apply
+        stealth = Stealth()
+        await stealth.apply_stealth_async(ctx)
+        
         async def block_route(route):
             if TRACK_RE.search(route.request.url) or BANDWIDTH_SAVE_RE.search(route.request.url): await route.abort()
             else: await route.continue_()
         await ctx.route("**/*", block_route)
-        page = await ctx.new_page(); await page.add_init_script(STEALTH_JS)
+        
+        # Random Cookies Generate
+        random_cookies = [{"name": f"cookie_{random.randint(1,1000)}", "value": f"val_{random.randint(1000,9999)}", "domain": ".linkpays.in", "path": "/"}]
+        await ctx.add_cookies(random_cookies)
+        
+        page = await ctx.new_page()
+        
+        # Native Stealth JS (Basic fallback)
+        await page.add_init_script("""
+            Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+            window.chrome = window.chrome || { runtime: {}, loadTimes: function(){}, csi: function(){} };
+            Object.defineProperty(navigator, 'languages', {get: () => ['en-IN','en']});
+            Object.defineProperty(navigator, 'plugins', {get: () => [1,2,3,4,5]});
+            Object.defineProperty(navigator, 'deviceMemory', {get: () => 8});
+            const stripDbg = c => typeof c === 'string' ? c.replace(/\\bdebugger\\b/g, '') : c;
+            const origEval = window.eval;
+            window.eval = function(c) {
+                if (typeof c === 'string' && /chp_?ad|chp_ads_block|chp_branding/i.test(c)) return undefined;
+                return origEval.call(this, stripDbg(c));
+            };
+            const origFn = window.Function;
+            window.Function = function(...a) { return origFn.apply(this, a.map(x => stripDbg(x))); };
+            const SPEEDUP = 20;
+            const _st = window.setTimeout;
+            window.setTimeout = function(fn, d, ...a) { return _st.call(this, fn, d > 500 ? Math.max(50, d / SPEEDUP) : d, ...a); };
+            const _si = window.setInterval;
+            window.setInterval = function(fn, d, ...a) { return _si.call(this, fn, d > 500 ? Math.max(50, d / SPEEDUP) : d, ...a); };
+        """)
+        
         try: await page.goto(target_url, wait_until="domcontentloaded", timeout=60000)
         except Exception as e:
             log("Navigation failed:", e); await browser.close(); display.stop()
@@ -607,7 +623,6 @@ async def run():
             db["used_ips"].append(ip)
             save_db(db)
             log(f"✅ Task completed and saved to DB: {dest_url}")
-            log(f"🌐 IP: {ip} | Region: {region} | State: {state} | Country: {country}")
         await browser.close()
     
     display.stop()
