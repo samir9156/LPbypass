@@ -1,4 +1,15 @@
 {
+  "used_ips": [
+    "152.55.176.251"
+  ],
+  "used_user_agents": [
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+  ],
+  "completed_tasks": [
+    "https://linkpays.in/vVVSq",
+    "https://t.me/SenpaiAnimess"
+  ],
+  "current_region": "us-east4-eqdc4a",
   "code:vVVSq": {
     "chainStartedAt": 1794304667038,
     "lastHost": "linkpays.in",
