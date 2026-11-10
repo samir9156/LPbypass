@@ -300,57 +300,65 @@ async def kill_chpadblock(page):
     except: return False
 
 async def find_cookie(page):
-    for loc in await page.locator(SEL).all():
-        if not await is_vis(loc): continue
-        if re.match(r"^(got\s*it!?|accept(\s*all)?|i\s*agree)$", await itext(loc), re.I): return loc
+    try:
+        for loc in await page.locator(SEL).all():
+            if not await is_vis(loc): continue
+            if re.match(r"^(got\s*it!?|accept(\s*all)?|i\s*agree)$", await itext(loc), re.I): return loc
+    except: pass
     return None
 
 async def find_not_robot(page):
-    for loc in await page.locator(SEL).all():
-        if not await is_vis(loc): continue
-        t = await itext(loc)
-        if len(t) > 60: continue
-        if not re.search(r"not\s*(?:a\s*)?robot|i['’]?m\s*not\s*robot", t, re.I): continue
-        try:
-            fake = await loc.evaluate(r"""el => {
-                let n = el;
-                for (let i = 0; i < 8 && n && n !== document.body; i++) {
-                    if (n.tagName === 'IFRAME') return 'iframe';
-                    const cls = ((n.className || '') + ' ' + (n.id || '')).toLowerCase();
-                    if (/(ad|ads|advert|sponsor|promo|banner|interstitial|popup|overlay)/.test(cls)) return 'ad-class';
-                    const s = getComputedStyle(n); const r = n.getBoundingClientRect();
-                    if ((s.position === 'fixed' || s.position === 'absolute') && r.width > 100 && r.width < 800 && r.height > 80 && r.height < 800 && (s.boxShadow !== 'none' || parseFloat(s.borderRadius) > 0)) return 'fixed-popup';
-                    n = n.parentElement;
-                }
-                return null;
-            }""")
-            if fake: continue
-        except: pass
-        return loc
+    try:
+        for loc in await page.locator(SEL).all():
+            if not await is_vis(loc): continue
+            t = await itext(loc)
+            if len(t) > 60: continue
+            if not re.search(r"not\s*(?:a\s*)?robot|i['’]?m\s*not\s*robot", t, re.I): continue
+            try:
+                fake = await loc.evaluate(r"""el => {
+                    let n = el;
+                    for (let i = 0; i < 8 && n && n !== document.body; i++) {
+                        if (n.tagName === 'IFRAME') return 'iframe';
+                        const cls = ((n.className || '') + ' ' + (n.id || '')).toLowerCase();
+                        if (/(ad|ads|advert|sponsor|promo|banner|interstitial|popup|overlay)/.test(cls)) return 'ad-class';
+                        const s = getComputedStyle(n); const r = n.getBoundingClientRect();
+                        if ((s.position === 'fixed' || s.position === 'absolute') && r.width > 100 && r.width < 800 && r.height > 80 && r.height < 800 && (s.boxShadow !== 'none' || parseFloat(s.borderRadius) > 0)) return 'fixed-popup';
+                        n = n.parentElement;
+                    }
+                    return null;
+                }""")
+                if fake: continue
+            except: pass
+            return loc
+    except: pass
     return None
 
 async def find_continue_nn(page):
     a_p, btn, a_href = None, None, None
-    for loc in await page.locator(SEL).all():
-        if not await is_vis(loc): continue
-        t = await itext(loc)
-        if not re.search(r"continue\s*\d+\s*/\s*\d+", t, re.I): continue
-        try: tag = await loc.evaluate("el => el.tagName")
-        except: tag = ""
-        if tag == "A":
-            href = await loc.get_attribute("href") or ""
-            if href and not href.startswith("javascript:") and not TRACK_RE.search(href):
-                if a_p is None: a_p, a_href = loc, href
-        elif btn is None: btn = loc
+    try:
+        for loc in await page.locator(SEL).all():
+            if not await is_vis(loc): continue
+            t = await itext(loc)
+            if not re.search(r"continue\s*\d+\s*/\s*\d+", t, re.I): continue
+            try: tag = await loc.evaluate("el => el.tagName")
+            except: tag = ""
+            if tag == "A":
+                href = await loc.get_attribute("href") or ""
+                if href and not href.startswith("javascript:") and not TRACK_RE.search(href):
+                    if a_p is None: a_p, a_href = loc, href
+            elif btn is None: btn = loc
+    except: pass
     return (a_p or btn, a_href)
 
 async def find_generic(page):
     pat = re.compile(r"^(continue(\s*to\s*(content|link))?|verify|get\s*link|proceed|submit|next|go\s*to\s*link|click\s*to\s*verify|back\s*for\s*link)$", re.I)
-    for loc in await page.locator(SEL).all():
-        if not await is_vis(loc): continue
-        t = await itext(loc)
-        if not t or len(t) > 90: continue
-        if pat.match(t): return loc
+    try:
+        for loc in await page.locator(SEL).all():
+            if not await is_vis(loc): continue
+            t = await itext(loc)
+            if not t or len(t) > 90: continue
+            if pat.match(t): return loc
+    except: pass
     return None
 
 async def wait_url_change(page, prev, timeout_s=25):
@@ -396,15 +404,12 @@ def is_valid_dest(u, current_url=None):
     if current_url and base_url(u) == base_url(current_url): return False
     return True
 
-# ==================== NEW: CONTENT CHECK ====================
 async def is_real_destination(page):
-    # Check buttons
     if await find_generic(page): return False
     if await find_not_robot(page): return False
     loc, _ = await find_continue_nn(page)
     if loc: return False
     
-    # Check page text
     try:
         text = await page.evaluate("() => (document.body?.innerText || '').toLowerCase()")
         if not text or len(text) < 50: return False
@@ -412,7 +417,6 @@ async def is_real_destination(page):
             return False
     except: return False
     
-    # Check meta refresh
     try:
         if await page.evaluate("() => !!document.querySelector('meta[http-equiv=\"refresh\" i]')"): return False
     except: pass
@@ -482,45 +486,62 @@ async def handle_chain_page(page, max_wait=300):
     await asyncio.sleep(1.5)
     if await fast_forward_meta(page): return "navigated"
     start = time.time(); init_url = page.url; nr_last = ""; nr_count = 0; last_click = 0; last_img = time.time()
+    
     while time.time() - start < max_wait:
-        if base_url(page.url) != base_url(init_url): return "navigated"
-        if page.url != nr_last: nr_count = 0; nr_last = page.url
-        if await close_all_x(page): await asyncio.sleep(0.3); continue
-        if await kill_chpadblock(page): await asyncio.sleep(0.2); continue
-        cookie = await find_cookie(page)
-        if cookie: await safe_click(cookie, page=page); await asyncio.sleep(0.4); continue
-        loc, href = await find_continue_nn(page)
-        if loc and await is_en(loc):
-            if href and href.startswith("http") and is_valid_dest(href, current_url=page.url):
-                try: await page.goto(href, wait_until="domcontentloaded", timeout=30000); return "navigated"
-                except: pass
-            if time.time() - last_click > 1.5:
+        try:
+            if base_url(page.url) != base_url(init_url): return "navigated"
+            if page.url != nr_last: nr_count = 0; nr_last = page.url
+            
+            if await close_all_x(page): await asyncio.sleep(0.3); continue
+            if await kill_chpadblock(page): await asyncio.sleep(0.2); continue
+            
+            cookie = await find_cookie(page)
+            if cookie: await safe_click(cookie, page=page); await asyncio.sleep(0.4); continue
+            
+            loc, href = await find_continue_nn(page)
+            if loc and await is_en(loc):
+                if href and href.startswith("http") and is_valid_dest(href, current_url=page.url):
+                    try: await page.goto(href, wait_until="domcontentloaded", timeout=30000); return "navigated"
+                    except: pass
+                if time.time() - last_click > 1.5:
+                    await safe_click(loc, page=page); last_click = time.time()
+                    if await wait_url_change(page, init_url, 20): return "navigated"
+                    continue
+            
+            loc = await find_generic(page)
+            if loc and await is_en(loc) and time.time() - last_click > 2:
                 await safe_click(loc, page=page); last_click = time.time()
                 if await wait_url_change(page, init_url, 20): return "navigated"
                 continue
-        loc = await find_generic(page)
-        if loc and await is_en(loc) and time.time() - last_click > 2:
-            await safe_click(loc, page=page); last_click = time.time()
-            if await wait_url_change(page, init_url, 20): return "navigated"
-            continue
-        nr = await find_not_robot(page)
-        if nr and nr_count < 1 and time.time() - last_click > 2:
-            await safe_click(nr, page=page); nr_count += 1; last_click = time.time(); await asyncio.sleep(2); continue
-        if time.time() - last_img > 25 and not nr:
-            try:
-                img = await page.evaluate("""() => {
-                    for (const img of document.querySelectorAll('img')) {
-                        const r = img.getBoundingClientRect();
-                        if (r.width < 150 || r.height < 100) continue;
-                        if (getComputedStyle(img).display === 'none') continue;
-                        const a = img.closest('a');
-                        if ((a && (a.getAttribute('target') === '_blank' || a.href)) || img.onclick) return {x: r.x + r.width/2, y: r.y + r.height/2};
-                    }
-                    return null;
-                }""")
-                if img: await page.mouse.click(img["x"], img["y"]); last_img = time.time(); await asyncio.sleep(2); continue
-            except: pass
-        await asyncio.sleep(0.5)
+            
+            nr = await find_not_robot(page)
+            if nr and nr_count < 1 and time.time() - last_click > 2:
+                await safe_click(nr, page=page); nr_count += 1; last_click = time.time(); await asyncio.sleep(2); continue
+            
+            if time.time() - last_img > 25 and not nr:
+                try:
+                    img = await page.evaluate("""() => {
+                        for (const img of document.querySelectorAll('img')) {
+                            const r = img.getBoundingClientRect();
+                            if (r.width < 150 || r.height < 100) continue;
+                            if (getComputedStyle(img).display === 'none') continue;
+                            const a = img.closest('a');
+                            if ((a && (a.getAttribute('target') === '_blank' || a.href)) || img.onclick) return {x: r.x + r.width/2, y: r.y + r.height/2};
+                        }
+                        return null;
+                    }""")
+                    if img: await page.mouse.click(img["x"], img["y"]); last_img = time.time(); await asyncio.sleep(2); continue
+                except: pass
+            
+            await asyncio.sleep(0.5)
+        except Exception as e:
+            if "Execution context was destroyed" in str(e) or "Target closed" in str(e):
+                await asyncio.sleep(1)
+                continue
+            else:
+                log(f"Chain loop error: {e}")
+                await asyncio.sleep(1)
+
     return "timeout"
 
 async def run():
@@ -558,55 +579,62 @@ async def run():
             return
 
         state = {}; dest_url = None; gateway_visits = {}; bounce_count = 0; last_base = ""; stuck = 0; t0 = time.time()
+        
         while time.time() - t0 < 900:
-            cur_u = page.url; cur_b = base_url(cur_u); cur_h = get_host(cur_u)
-            
-            # Check if it's potentially a destination
-            if cur_h and cur_h not in GATEWAY_HOSTS and cur_h not in CHAIN_HOSTS and not re.search(r'[?&](verify|link|code|goto|go|r|ref)=', cur_u, re.I) and not TRACK_RE.search(cur_u):
-                await asyncio.sleep(1.5) # Wait for page content to load
-                if await is_real_destination(page):
-                    dest_url = cur_u; log(f"✅ DESTINATION: {cur_u}"); break
-                else:
-                    log(f"  🔗 Disguised chain page detected at {cur_h}")
-
-            if cur_b == last_base: stuck += 1
-            else: stuck = 0; last_base = cur_b
-            if stuck > 180: log("STUCK"); break
-            
-            code_m = re.match(r"^/([A-Za-z0-9_-]{2,})/?$", urlparse(cur_u).path)
-            code = code_m.group(1) if code_m and (cur_h == "linkpays.in" or cur_h.endswith(".linkpays.in")) else None
-
-            if code:
-                pstate = await gateway_page_state(page); ent = state.get(f"code:{code}", {})
-                is_ret_state = (ent.get("chainStartedAt") and (time.time()*1000 - ent["chainStartedAt"] < 30*60*1000) and ent.get("lastHost"))
-                gateway_visits[code] = gateway_visits.get(code, 0) + 1
-                if gateway_visits[code] > 6: break
-                if pstate == "fresh":
-                    state[f"code:{code}"] = {"chainStartedAt": int(time.time()*1000), "lastHost": cur_h, "lastUrl": cur_u}
-                    save_db(state); await handle_gateway_fresh(page, code)
-                elif pstate == "return" or (pstate == "unknown" and is_ret_state):
-                    res = await handle_gateway_return(page, code, state)
-                    if res == "bounced": bounce_count += 1; 
-                    if bounce_count >= 2: break
-                    await asyncio.sleep(5)
-                else:
-                    if is_ret_state:
-                        res = await handle_gateway_return(page, code, state)
-                        if res == "bounced":
-                            bounce_count += 1
-                            if bounce_count >= 2: break
+            try:
+                cur_u = page.url; cur_b = base_url(cur_u); cur_h = get_host(cur_u)
+                
+                if cur_h and cur_h not in GATEWAY_HOSTS and cur_h not in CHAIN_HOSTS and not re.search(r'[?&](verify|link|code|goto|go|r|ref)=', cur_u, re.I) and not TRACK_RE.search(cur_u):
+                    await asyncio.sleep(1.5)
+                    if await is_real_destination(page):
+                        dest_url = cur_u; log(f"✅ DESTINATION: {cur_u}"); break
                     else:
+                        log(f"  🔗 Disguised chain page detected at {cur_h}")
+
+                if cur_b == last_base: stuck += 1
+                else: stuck = 0; last_base = cur_b
+                if stuck > 180: log("STUCK"); break
+                
+                code_m = re.match(r"^/([A-Za-z0-9_-]{2,})/?$", urlparse(cur_u).path)
+                code = code_m.group(1) if code_m and (cur_h == "linkpays.in" or cur_h.endswith(".linkpays.in")) else None
+
+                if code:
+                    pstate = await gateway_page_state(page); ent = state.get(f"code:{code}", {})
+                    is_ret_state = (ent.get("chainStartedAt") and (time.time()*1000 - ent["chainStartedAt"] < 30*60*1000) and ent.get("lastHost"))
+                    gateway_visits[code] = gateway_visits.get(code, 0) + 1
+                    if gateway_visits[code] > 6: break
+                    if pstate == "fresh":
                         state[f"code:{code}"] = {"chainStartedAt": int(time.time()*1000), "lastHost": cur_h, "lastUrl": cur_u}
                         save_db(state); await handle_gateway_fresh(page, code)
-            else:
-                await handle_chain_page(page)
+                    elif pstate == "return" or (pstate == "unknown" and is_ret_state):
+                        res = await handle_gateway_return(page, code, state)
+                        if res == "bounced": bounce_count += 1; 
+                        if bounce_count >= 2: break
+                        await asyncio.sleep(5)
+                    else:
+                        if is_ret_state:
+                            res = await handle_gateway_return(page, code, state)
+                            if res == "bounced":
+                                bounce_count += 1
+                                if bounce_count >= 2: break
+                        else:
+                            state[f"code:{code}"] = {"chainStartedAt": int(time.time()*1000), "lastHost": cur_h, "lastUrl": cur_u}
+                            save_db(state); await handle_gateway_fresh(page, code)
+                else:
+                    await handle_chain_page(page)
 
-            if base_url(page.url) != base_url(cur_u):
-                nh = get_host(page.url)
-                if nh and nh not in GATEWAY_HOSTS and nh not in CHAIN_HOSTS and not re.search(r'[?&](verify|link|code|goto|go|r|ref)=', page.url, re.I) and not TRACK_RE.search(page.url):
-                    # Will be checked on next loop iteration
-                    pass
-            await asyncio.sleep(0.8)
+                if base_url(page.url) != base_url(cur_u):
+                    nh = get_host(page.url)
+                    if nh and nh not in GATEWAY_HOSTS and nh not in CHAIN_HOSTS and not re.search(r'[?&](verify|link|code|goto|go|r|ref)=', page.url, re.I) and not TRACK_RE.search(page.url):
+                        pass
+                await asyncio.sleep(0.8)
+            except Exception as e:
+                if "Execution context was destroyed" in str(e) or "Target closed" in str(e):
+                    await asyncio.sleep(1)
+                    continue
+                else:
+                    log(f"Main loop error: {e}")
+                    await asyncio.sleep(1)
 
         if dest_url:
             db = load_db()
