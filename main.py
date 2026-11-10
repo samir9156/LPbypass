@@ -1,4 +1,4 @@
-import os, re, json, time, asyncio, random, urllib.parse, urllib.request, base64, socket, selectors, threading
+import os, re, json, time, asyncio, random, urllib.parse, urllib.request
 from datetime import datetime
 from urllib.parse import urlparse, urljoin
 from pyvirtualdisplay import Display
@@ -10,7 +10,6 @@ RAILWAY_TOKEN = os.environ.get("RAILWAY_TOKEN", "")
 RAILWAY_SERVICE_ID = os.environ.get("RAILWAY_SERVICE_ID", "")
 RAILWAY_ENVIRONMENT_ID = os.environ.get("RAILWAY_ENVIRONMENT_ID", "")
 
-PROXY_FILE = "proxy.txt"
 DB_FILE = "db.json"
 URLS_FILE = "urls.txt"
 
@@ -119,59 +118,6 @@ def trigger_railway_redeploy():
         log(f"❌ Failed to trigger Railway API: {e.code} Forbidden (Check token!)")
     except Exception as e:
         log(f"❌ Failed to trigger Railway API: {e}")
-
-# ==================== LOCAL AUTH PROXY ====================
-class LocalAuthProxy:
-    def __init__(self, host, port, username, password):
-        self.host = host; self.port = port
-        self.auth_header = "Basic " + base64.b64encode(f"{username}:{password}".encode()).decode()
-        self.sel = selectors.DefaultSelector(); self.running = False; self.server_sock = None
-    def start(self):
-        self.server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.server_sock.bind(("127.0.0.1", 0)); self.server_sock.listen(100)
-        self.server_sock.setblocking(False); self.port = self.server_sock.getsockname()[1]
-        self.sel.register(self.server_sock, selectors.EVENT_READ, self._accept)
-        self.running = True; threading.Thread(target=self._run, daemon=True).start()
-        return self.port
-    def stop(self):
-        self.running = False
-        if self.server_sock:
-            try: self.server_sock.close()
-            except: pass
-    def _run(self):
-        while self.running:
-            try:
-                for key, mask in self.sel.select(timeout=0.5): key.data(key.fileobj)
-            except: pass
-    def _accept(self, sock):
-        conn, addr = sock.accept(); conn.setblocking(False)
-        self.sel.register(conn, selectors.EVENT_READ, self._read)
-    def _read(self, conn):
-        try:
-            data = conn.recv(65536)
-            if not data: self._close(conn); return
-            header_end = data.find(b"\r\n\r\n")
-            if header_end != -1:
-                head = data[:header_end].decode('utf-8', errors='ignore'); body = data[header_end:]
-                if "Proxy-Authorization" not in head:
-                    lines = head.split("\r\n"); new_headers = lines[0] + "\r\n"
-                    for line in lines[1:]:
-                        if line.lower().startswith("host:") or line.lower().startswith("proxy-connection:"):
-                            new_headers += line + "\r\n"
-                    new_headers += f"Proxy-Authorization: {self.auth_header}\r\nProxy-Connection: close\r\n\r\n"
-                    data = new_headers.encode('utf-8') + body
-            upstream = socket.create_connection((self.host, self.port), timeout=15)
-            upstream.sendall(data)
-            while True:
-                resp = upstream.recv(65536)
-                if not resp: break
-                conn.sendall(resp)
-            self._close(conn); upstream.close()
-        except: self._close(conn)
-    def _close(self, conn):
-        try: self.sel.unregister(conn); conn.close()
-        except: pass
 
 # ==================== STEALTH JS ====================
 STEALTH_JS = """
@@ -549,20 +495,15 @@ async def run():
     if not target_url: log("🎉 All URLs completed. Exiting."); return
     log(f"🎯 Selected Random Target: {target_url}")
     
-    proxy_url = None
-    if os.path.exists(PROXY_FILE):
-        with open(PROXY_FILE, "r") as f:
-            lines = [l.strip() for l in f if l.strip() and not l.startswith("#")]
-            if lines: proxy_url = random.choice(lines)
-            
     ua = random.choice(["Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36", "Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36"])
     
     display = Display(visible=0, size=(1920, 1080)); display.start()
-    local_proxy = None; launch_opts = {"headless": False, "args": ["--no-sandbox", "--disable-dev-shm-usage", "--disable-blink-features=AutomationControlled"]}
-    if proxy_url:
-        parsed = urlparse(proxy_url)
-        local_proxy = LocalAuthProxy(parsed.hostname, parsed.port, parsed.username, parsed.password)
-        launch_opts["proxy"] = {"server": f"http://127.0.0.1:{local_proxy.start()}"}
+    
+    # SIRF RAILWAY IP KE LIYE LAUNCH OPTS (NO PROXY)
+    launch_opts = {
+        "headless": False, 
+        "args": ["--no-sandbox", "--disable-dev-shm-usage", "--disable-blink-features=AutomationControlled"]
+    }
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(**launch_opts)
@@ -575,7 +516,6 @@ async def run():
         try: await page.goto(target_url, wait_until="domcontentloaded", timeout=60000)
         except Exception as e:
             log("Navigation failed:", e); await browser.close(); display.stop()
-            if local_proxy: local_proxy.stop()
             return
 
         state = {}; dest_url = None; gateway_visits = {}; bounce_count = 0; last_base = ""; stuck = 0; t0 = time.time()
@@ -645,12 +585,11 @@ async def run():
             if target_url not in db["completed_tasks"]: db["completed_tasks"].append(target_url)
             if dest_url not in db["completed_tasks"]: db["completed_tasks"].append(dest_url)
             db["used_user_agents"].append(ua)
-            if proxy_url: db["used_ips"].append(proxy_url)
+            db["used_ips"].append("railway_ip") # Placeholder for tracking
             save_db(db)
             log(f"✅ Task completed and saved to DB: {dest_url}")
         await browser.close()
     
-    if local_proxy: local_proxy.stop()
     display.stop()
     trigger_railway_redeploy()
 
