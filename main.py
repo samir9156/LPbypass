@@ -1,9 +1,9 @@
-import os, re, json, time, asyncio, random, urllib.parse, urllib.request, base64, socket
+import os, re, json, time, asyncio, random, urllib.parse, urllib.request, base64
 from datetime import datetime
 from urllib.parse import urlparse, urljoin
 from pyvirtualdisplay import Display
 from playwright.async_api import async_playwright
-from playwright_stealth import stealth_async
+from playwright_stealth import Stealth
 
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
 GITHUB_REPO = os.environ.get("GITHUB_REPO", "")
@@ -503,6 +503,11 @@ async def run():
         browser = await p.chromium.launch(**launch_opts)
         ctx = await browser.new_context(user_agent=ua, viewport={"width": 1920, "height": 1080}, locale="en-IN")
         
+        # ==================== APPLY STEALTH (NEW API) ====================
+        stealth = Stealth()
+        await stealth.apply_stealth_async(ctx)
+        # =============================================================
+        
         async def block_route(route):
             if TRACK_RE.search(route.request.url) or BANDWIDTH_SAVE_RE.search(route.request.url): await route.abort()
             else: await route.continue_()
@@ -512,9 +517,6 @@ async def run():
         await ctx.add_cookies(random_cookies)
         
         page = await ctx.new_page()
-        
-        # Apply Playwright Stealth
-        await stealth_async(page)
         
         await page.add_init_script("""
             Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
