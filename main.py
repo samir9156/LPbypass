@@ -19,7 +19,6 @@ CHAIN_HOSTS = {"roadtaxcalculatorr.my", "rank1st.in", "pipefitter.in", "startupl
 TRACK_RE = re.compile(r"doubleclick|googlesyndication|google-analytics|googletagmanager|adtrafficquality|safeframe|sodar|quantserve|rubicon|bluekai|1rx\.io|tribalfusion|adtdp|criteo|taboola|outbrain|temu\.com|recaptcha|challenges\.cloudflare|adnxs|adsystem|adservice|pagead|adserver|adcolony|unityads|vungle|applovin|mopub|inmobi|chartboost|ironsrc|fyber|smaato|chpadblock", re.I)
 BANDWIDTH_SAVE_RE = re.compile(r"\.(mp4|webm|mp3|wav|ogg|woff|woff2|ttf|otf|eot)(\?.*)?$", re.I)
 
-# Fixed Regions for Railway (Virginia, California)
 REGIONS = ["us-east4-eqdc4a", "us-west4"]
 
 def log(*a): print(f"[{datetime.now().strftime('%H:%M:%S')}]", *a, flush=True)
@@ -75,7 +74,7 @@ def get_next_url():
     if not available: return None
     return random.choice(available)
 
-# ==================== RAILWAY API FIX ====================
+# ==================== RAILWAY API ====================
 def trigger_railway_redeploy():
     if not RAILWAY_TOKEN or not RAILWAY_SERVICE_ID or not RAILWAY_ENVIRONMENT_ID:
         log("⚠️ Railway API keys missing.")
@@ -373,7 +372,10 @@ async def fast_forward_meta(page):
         }""")
     except: content = None
     if not content: return False
-    m = re.match(r"^\s*(\d+)\s*;\s*url\s*=\s*['"]?([^'"]+)", content, re.I)
+    
+    # REGEX FIXED HERE (Used triple quotes to avoid quote conflict)
+    m = re.match(r"""^\s*(\d+)\s*;\s*url\s*=\s*['"]?([^'"]+)""", content, re.I)
+    
     if not m or int(m.group(1)) < 2: return False
     try: target = urljoin(page.url, m.group(2))
     except: return False
