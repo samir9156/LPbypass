@@ -1,18 +1,7 @@
 {
-  "used_ips": [
-    "railway_ip"
-  ],
-  "used_user_agents": [
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-  ],
-  "completed_tasks": [
-    "https://linkpays.in/62Uv",
-    "https://headlinelogic.com/?d=movies4u.toys&pcid=56&a=false&uuid=675bdc57f15f77b1c42c57304529cb19&brand=movies4u.toys"
-  ],
-  "current_region": "us-west4",
-  "code:62Uv": {
-    "chainStartedAt": 1794301569975,
+  "code:vVVSq": {
+    "chainStartedAt": 1794302239967,
     "lastHost": "linkpays.in",
-    "lastUrl": "https://linkpays.in/62Uv"
+    "lastUrl": "https://linkpays.in/vVVSq"
   }
 }
